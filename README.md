@@ -6,15 +6,6 @@ I've used Divinity for multiple projects like <a href="https://github.com/Micros
 <details>
   <summary>Table of Contents</summary>
   <ol>
-    <li>
-      <a href="#Mapper">Mapper</a>
-    </li>
-    <li>
-      <a href="#Injector">Injector</a>
-    </li>
-    <li>
-      <a href="#Driver">Driver</a>
-    </li>
     <li><a href="#documentation">Documentation</a></li>
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#conclusion">Conclusion</a></li>
@@ -27,7 +18,7 @@ The mapper allocates inside by splitting large pages backed by ```ntoskrnl.exe``
 The driver allocates process memory by injecting **mirrored PML4** entries into the **target, clone, and client address spaces**. <br />
 
 <details>
-<summary><b>Mapper</b></summary> - <a href="./divinity-mapper/">View Code</a>
+<summary><b>Mapper - <a href="./divinity-mapper/">View Code</a></b></summary>
 
   The mapper searches the ```ntoskrnl.exe``` for **unused large pages inside existing sections**. <br />
   When the unused large page is found the mapper **splits that large page into 4KB pages**. <br />
@@ -44,7 +35,7 @@ This defeats two common checks:
 </details>
 
 <details>
-  <summary><b>Injector</b></summary> - <a href="./divinity-injector/">View Code</a>
+  <summary><b>Injector - <a href="./divinity-injector/">View Code</a></b></summary>
 
   The injector manual maps a Dll into the target process through the **driver's hyperspace framework**. <br />
   It allocates memory through hyperspace, resolves imports, maps missing dependencies, and executes <b>DllMain through thread injection</b>. <br />
@@ -73,7 +64,7 @@ If the **allocation is not released**, the stale PML4E can cause **bugchecks** a
 </details>
 
 <details>
-  <summary><b>Driver</b></summary> - <a href="./divinity-driver/">View Code</a>
+  <summary><b>Driver - <a href="./divinity-driver/">View Code</a></b></summary>
 
   The **driver is mapped into backed executable memory**, so it **can use <b>PsCreateSystemThread</b>** for communication **without needing a custom hidden thread**. <br />
   We use a **WNF state change subscription to receive the intialization data** from the client process. <br />
