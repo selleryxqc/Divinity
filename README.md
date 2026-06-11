@@ -7,15 +7,15 @@ I've used Divinity for multiple projects like <a href="https://github.com/Micros
   <summary>Table of Contents</summary>
   <ol>
     <li>
-      <a href="#mapper">Mapper</a>
+      <a href="#Mapper">Mapper</a>
     </li>
     <li>
-      <a href="#injector">Injector</a>
+      <a href="#Injector">Injector</a>
     </li>
     <li>
-      <a href="#driver">Driver</a>
+      <a href="#Driver">Driver</a>
     </li>
-    <li><a href="#documentation">Roadmap</a></li>
+    <li><a href="#documentation">Documentation</a></li>
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#conclusion">Conclusion</a></li>
   </ol>
