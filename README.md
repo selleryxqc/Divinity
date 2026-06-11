@@ -1,6 +1,6 @@
 # Divinity
 Divinity is a multi-purpose project windows kernel framework for **driver mapping, communication and Dll injection**. <br />
-I've used **divinity-mapper** for multiple projects like my upcoming **sorana spoofer**, **nocturnal hypervisor** and e.g.. <br />
+I've used **divinity-mapper** for multiple projects like my upcoming **Sorana Spoofer**, <a href="https://github.com/MicrosoftARMAssembler/Nocturnal-HV">**Nocturnal HV**</a>, <a href="https://github.com/MicrosoftARMAssembler/Divinity-Fortnite-Internal/tree/main">**Divinity Internal**</a>, e.g.. <br />
 It's personally my **favorite mapper** I've developed because it lets you perform operations that would be normally **detected** in your driver. <br />
 
 <details>
@@ -27,7 +27,7 @@ The mapper allocates inside by splitting large pages backed by ```ntoskrnl.exe``
 The driver allocates process memory by injecting **mirrored PML4** entries into the **target, clone, and client address spaces**. <br />
 
 <details>
-<summary><b>Mapper</b></summary>
+<summary><b>Mapper</b></summary> - <a href="./divinity-mapper/">View Code</a>
 
   The mapper searches the ```ntoskrnl.exe``` for **unused large pages inside existing sections**. <br />
   When the unused large page is found the mapper **splits that large page into 4KB pages**. <br />
@@ -44,7 +44,7 @@ This defeats two common checks:
 </details>
 
 <details>
-  <summary><b>Injector</b></summary>
+  <summary><b>Injector</b></summary> - <a href="./divinity-injector/">View Code</a>
 
   The injector manual maps a Dll into the target process through the **driver's hyperspace framework**. <br />
   It allocates memory through hyperspace, resolves imports, maps missing dependencies, and executes <b>DllMain through thread injection</b>. <br />
@@ -73,7 +73,7 @@ If the **allocation is not released**, the stale PML4E can cause **bugchecks** a
 </details>
 
 <details>
-  <summary><b>Driver</b></summary>
+  <summary><b>Driver</b></summary> - <a href="./divinity-driver/">View Code</a>
 
   The **driver is mapped into backed executable memory**, so it **can use <b>PsCreateSystemThread</b>** for communication **without needing a custom hidden thread**. <br />
   We use a **WNF state change subscription to receive the intialization data** from the client process. <br />
