@@ -1,0 +1,55 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36811.4
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "divinity-mapper", "divinity-mapper\divinity-mapper.vcxproj", "{D2C2DF48-ED01-4C8E-96A3-8A501FB96D75}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "divinity-driver", "divinity-driver\divinity-driver.vcxproj", "{4DE080F7-ECD1-82FE-C5F0-C963CA43F383}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "divinity-injector", "divinity-injector\divinity-injector.vcxproj", "{95BACB5A-11C3-4B0B-8A27-22A0ECAF7F7F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D2C2DF48-ED01-4C8E-96A3-8A501FB96D75}.Debug|x64.ActiveCfg = Debug|x64
+		{D2C2DF48-ED01-4C8E-96A3-8A501FB96D75}.Debug|x64.Build.0 = Debug|x64
+		{D2C2DF48-ED01-4C8E-96A3-8A501FB96D75}.Debug|x86.ActiveCfg = Debug|Win32
+		{D2C2DF48-ED01-4C8E-96A3-8A501FB96D75}.Debug|x86.Build.0 = Debug|Win32
+		{D2C2DF48-ED01-4C8E-96A3-8A501FB96D75}.Release|x64.ActiveCfg = Release|x64
+		{D2C2DF48-ED01-4C8E-96A3-8A501FB96D75}.Release|x64.Build.0 = Release|x64
+		{D2C2DF48-ED01-4C8E-96A3-8A501FB96D75}.Release|x86.ActiveCfg = Release|Win32
+		{D2C2DF48-ED01-4C8E-96A3-8A501FB96D75}.Release|x86.Build.0 = Release|Win32
+		{4DE080F7-ECD1-82FE-C5F0-C963CA43F383}.Debug|x64.ActiveCfg = Debug|x64
+		{4DE080F7-ECD1-82FE-C5F0-C963CA43F383}.Debug|x64.Build.0 = Debug|x64
+		{4DE080F7-ECD1-82FE-C5F0-C963CA43F383}.Debug|x64.Deploy.0 = Debug|x64
+		{4DE080F7-ECD1-82FE-C5F0-C963CA43F383}.Debug|x86.ActiveCfg = Debug|x64
+		{4DE080F7-ECD1-82FE-C5F0-C963CA43F383}.Debug|x86.Build.0 = Debug|x64
+		{4DE080F7-ECD1-82FE-C5F0-C963CA43F383}.Debug|x86.Deploy.0 = Debug|x64
+		{4DE080F7-ECD1-82FE-C5F0-C963CA43F383}.Release|x64.ActiveCfg = Release|x64
+		{4DE080F7-ECD1-82FE-C5F0-C963CA43F383}.Release|x64.Build.0 = Release|x64
+		{4DE080F7-ECD1-82FE-C5F0-C963CA43F383}.Release|x64.Deploy.0 = Release|x64
+		{4DE080F7-ECD1-82FE-C5F0-C963CA43F383}.Release|x86.ActiveCfg = Release|x64
+		{4DE080F7-ECD1-82FE-C5F0-C963CA43F383}.Release|x86.Build.0 = Release|x64
+		{4DE080F7-ECD1-82FE-C5F0-C963CA43F383}.Release|x86.Deploy.0 = Release|x64
+		{95BACB5A-11C3-4B0B-8A27-22A0ECAF7F7F}.Debug|x64.ActiveCfg = Debug|x64
+		{95BACB5A-11C3-4B0B-8A27-22A0ECAF7F7F}.Debug|x64.Build.0 = Debug|x64
+		{95BACB5A-11C3-4B0B-8A27-22A0ECAF7F7F}.Debug|x86.ActiveCfg = Debug|Win32
+		{95BACB5A-11C3-4B0B-8A27-22A0ECAF7F7F}.Debug|x86.Build.0 = Debug|Win32
+		{95BACB5A-11C3-4B0B-8A27-22A0ECAF7F7F}.Release|x64.ActiveCfg = Release|x64
+		{95BACB5A-11C3-4B0B-8A27-22A0ECAF7F7F}.Release|x64.Build.0 = Release|x64
+		{95BACB5A-11C3-4B0B-8A27-22A0ECAF7F7F}.Release|x86.ActiveCfg = Release|Win32
+		{95BACB5A-11C3-4B0B-8A27-22A0ECAF7F7F}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {DAF47032-F0F4-48CB-92E1-F8059889B176}
+	EndGlobalSection
+EndGlobal
