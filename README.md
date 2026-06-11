@@ -1,6 +1,6 @@
 # Divinity
 Divinity is a multi-purpose project windows kernel framework for **driver mapping, communication and Dll injection**. <br />
-I've used **divinity-mapper** for multiple projects like my upcoming **Sorana Spoofer**, <a href="https://github.com/MicrosoftARMAssembler/Nocturnal-HV">**Nocturnal HV**</a>, <a href="https://github.com/MicrosoftARMAssembler/Divinity-Fortnite-Internal/tree/main">**Divinity Internal**</a>, e.g.. <br />
+I've used **divinity-mapper** for multiple projects like my **upcoming Sorana Spoofer**, <a href="https://github.com/MicrosoftARMAssembler/Nocturnal-HV">**Nocturnal HV**</a>, <a href="https://github.com/MicrosoftARMAssembler/Divinity-Fortnite-Internal/tree/main">**Divinity Internal**</a>, e.g.. <br />
 It's personally my **favorite mapper** I've developed because it lets you perform operations that would be normally **detected** in your driver. <br />
 
 <details>
