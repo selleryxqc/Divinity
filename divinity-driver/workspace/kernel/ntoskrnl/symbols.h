@@ -32,11 +32,19 @@ namespace kernel {
             std::uint64_t m_mi_initialize_pfn_for_other_process;
             std::uint64_t m_mi_allocate_vad;
             std::uint64_t m_mi_insert_vad;
-            std::uint64_t m_rtl_get_extended_context_length2;
-            std::uint64_t m_rtl_initialize_extended_context2;
-            std::uint64_t m_psp_user_thread_start;
             std::uint64_t m_rtlp_debug_print_callback_list;
+            std::uint64_t m_kdp_trap;
+            std::uint64_t m_nt_global_flag;
+            std::uint64_t m_kdp_debug_routine_select;
+            std::uint64_t m_kdp_report;
+            std::uint64_t m_etw_trace_silo_kernel_event;
+            std::uint64_t m_ke_service_descriptor_table;
+            std::uint64_t m_ki_system_call64;
         } m_pdb;
+
+        struct offsets_t {
+            std::uint64_t m_thread_start_address;
+        } m_offsets;
 
         std::uint64_t m_image_base;
         std::uint64_t m_image_size;
