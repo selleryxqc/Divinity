@@ -20,7 +20,7 @@ The driver allocates process memory by injecting **mirrored PML4** entries into 
 <details>
 <summary><b>Mapper - <a href="./divinity-mapper/">View Code</a></b></summary>
 
-  The mapper searches the ```ntoskrnl.exe``` for **unused large pages inside existing sections**. <br />
+  The mapper searches ```ntoskrnl.exe``` for **unused large pages inside existing sections**. <br />
   When the unused large page is found the mapper **splits that large page into 4KB pages**. <br />
   This gives the mapped driver **backed executable memory**. <br />
 
