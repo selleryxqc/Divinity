@@ -251,6 +251,11 @@ namespace pdb {
 
         const auto candidates = dia_find_candidates( );
         for ( const auto& candidate : candidates ) {
+            if ( *out_source ) {
+                ( *out_source )->Release( );
+                *out_source = nullptr;
+            }
+
             hr = NoRegCoCreate(
                 candidate.c_str( ),
                 CLSID_DiaSource,
@@ -265,6 +270,11 @@ namespace pdb {
                 module = LoadLibraryW( candidate.c_str( ) );
             if ( !module )
                 continue;
+
+            if ( *out_source ) {
+                ( *out_source )->Release( );
+                *out_source = nullptr;
+            }
 
             hr = dia_create_from_module( module, out_source );
             if ( SUCCEEDED( hr ) && *out_source )
