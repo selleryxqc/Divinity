@@ -7,12 +7,18 @@ bool entry_point( kernel::entry_t* entry ) {
 		sizeof( kernel::m_pdb )
 	);
 
+	std::memcpy(
+		&kernel::m_offsets,
+		&entry->m_offsets,
+		sizeof( kernel::m_offsets )
+	);
+
 	kernel::m_ntoskrnl_base = kernel::get_ntoskrnl_base( );
 	if ( !kernel::m_ntoskrnl_base )
 		return false;
 
 	auto system_process = kernel::ps_initial_system_process( );
-	paging::m_system_directory_table_base = system_process->m_pcb.m_directory_table_base;
+	paging::m_system_directory_table_base = system_process->m_pcb.m_directory_table_base & ~0xFFFull;
 	if ( !paging::m_system_directory_table_base ) {
 		kernel::dbg_print( oxorany( "[divinity] Could not system directory table base\n" ) );
 		return false;
@@ -30,10 +36,10 @@ bool entry_point( kernel::entry_t* entry ) {
 		return false;
 	}
 
-	//if ( !paging::hyperspace::setup_hyperspace( ) ) {
-	//	kernel::dbg_print( oxorany( "[divinity] Could not initialize hyperspace\n" ) );
-	//	return false;
-	//}
+	if ( !paging::hyperspace::setup_hyperspace( ) ) {
+		kernel::dbg_print( oxorany( "[divinity] Could not initialize hyperspace\n" ) );
+		return false;
+	}
 
 	if ( !hide::hide_pages( entry->m_image_base, entry->m_image_size ) ) {
 		kernel::dbg_print( oxorany( "[divinity] Could not hide driver image\n" ) );

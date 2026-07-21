@@ -53,6 +53,13 @@ namespace map {
 
         struct offsets_t {
             std::uint64_t m_thread_start_address;
+            std::uint64_t m_user_directory_table_base;
+            std::uint64_t m_vad_root;
+            std::uint64_t m_flags;
+            std::uint64_t m_flags3;
+            std::uint64_t m_rundown_protect;
+            std::uint64_t m_thread_list_head;
+            std::uint64_t m_directory_table_base;
         } m_offsets;
 
         std::uint64_t m_image_base;

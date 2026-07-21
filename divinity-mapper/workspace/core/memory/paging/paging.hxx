@@ -35,24 +35,47 @@ namespace paging {
         std::uint64_t m_physical_mask{ };
 
         bool setup( ) {
-            //auto page_buffer = std::make_unique<uint8_t[ ]>( 0x1000 );
-            //for ( uint64_t page = 0; page < 0x20000000; page += 0x1000 ) {
-            //    if ( !g_driver->read_physical_memory( page, page_buffer.get( ), 0x1000 ) )
-            //        continue;
+            const auto ntos_base = g_pdb->m_module_base;
+            if ( !ntos_base ) {
+                logging::print( oxorany( "ntoskrnl base unavailable for cr3 discovery" ) );
+                return false;
+            }
 
-            //    if ( page_buffer[ 0 ] == 0xE9 && page_buffer[ 1 ] == 0x4D &&
-            //        page_buffer[ 2 ] == 0x06 && page_buffer[ 3 ] == 0x00 ) {
-            //        uint64_t dtb = *reinterpret_cast< uint64_t* >( page_buffer.get( ) + 0xA0 );
-            //        if ( dtb && ( dtb & 0xFFF ) == 0 ) {
-            //            logging::print( oxorany( "found system cr3: 0x%llx" ), dtb );
-            //            this->m_directory_table_base = dtb;
-            //            return true;
-            //        }
-            //    }
-            //}
+            virt_addr_t ntos_va{ ntos_base };
+            constexpr std::uint64_t max_scan = 0x400000000ULL;
 
-            this->m_directory_table_base = 0x1ad000;
-            return true;
+            for ( std::uint64_t cr3 = 0; cr3 < max_scan; cr3 += page_4kb_size ) {
+                pml4e pml4_entry{};
+                if ( !g_driver->read_physical_memory(
+                    cr3 + ( ntos_va.pml4e_index * sizeof( pml4e ) ),
+                    &pml4_entry, sizeof( pml4e ) ) )
+                    continue;
+
+                if ( !pml4_entry.hard.present )
+                    continue;
+
+                this->m_directory_table_base = cr3;
+
+                std::uint16_t mz = 0;
+                if ( !read_virtual_memory( ntos_base, &mz, sizeof( mz ) ) || mz != IMAGE_DOS_SIGNATURE )
+                    continue;
+
+                std::uint32_t lfanew = 0;
+                if ( !read_virtual_memory( ntos_base + 0x3C, &lfanew, sizeof( lfanew ) ) )
+                    continue;
+
+                std::uint32_t pe_sig = 0;
+                if ( !read_virtual_memory( ntos_base + lfanew, &pe_sig, sizeof( pe_sig ) ) ||
+                    pe_sig != IMAGE_NT_SIGNATURE )
+                    continue;
+
+                logging::print( oxorany( "found system cr3: 0x%llx" ), cr3 );
+                return true;
+            }
+
+            this->m_directory_table_base = 0;
+            logging::print( oxorany( "could not discover system cr3" ) );
+            return false;
         }
 
         std::uint64_t translate_linear( std::uint64_t addr, std::uint32_t* page_size = 0 ) {

@@ -105,11 +105,19 @@ namespace portal {
             return true;
         }
 
+        void free_all( ) {
+            while ( !m_clone_allocations.empty( ) ) {
+                auto allocation = m_clone_allocations.back( );
+                g_driver->free_virtual( m_target_process, allocation.m_target_va );
+                m_clone_allocations.pop_back( );
+            }
+        }
+
         std::uint32_t find_thread_id( bool best_delta ) const {
-            if ( !m_clone_process )
+            if ( !m_target_process )
                 return 0;
 
-            auto target_pid = g_driver->get_process_id( m_clone_process );
+            auto target_pid = g_driver->get_process_id( m_target_process );
             if ( !target_pid )
                 return 0;
 

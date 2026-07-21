@@ -339,8 +339,13 @@ loop_start:
 					case control::control_type::hyperspace_get_context: {
 						auto index =
 							paging::hyperspace::find_entry( control::m_control_data->m_process );
+						if ( index == -1 ) {
+							control::m_control_data->m_status = false;
+							break;
+						}
 						control::m_control_data->m_process = paging::hyperspace::m_entries[ index ].m_clone_process;
-						control::m_control_data->m_address = control::m_control_data->m_process->m_pcb.m_directory_table_base;
+						control::m_control_data->m_address = control::m_control_data->m_process->m_pcb.m_directory_table_base & ~0xFFFull;
+						control::m_control_data->m_status = true;
 					} break;
 					case control::control_type::hyperspace_allocate_virtual: {
 						auto base_address = paging::hyperspace::allocate_virtual(

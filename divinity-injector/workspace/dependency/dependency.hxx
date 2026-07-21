@@ -186,6 +186,8 @@ namespace dependency {
             auto flags_va = reinterpret_cast< std::uint32_t* >( section_va + offsetof( exec_context_t, m_status ) );
             auto result_va = reinterpret_cast< std::uint32_t* >( section_va + offsetof( exec_context_t, m_result ) );
 
+            auto dll_process_attach = 1u;
+
             std::vector<std::uint8_t> shellcode;
             shellcode.insert( shellcode.end( ), { 0x50 } );
             shellcode.insert( shellcode.end( ), { 0x51 } );
@@ -194,6 +196,7 @@ namespace dependency {
             shellcode.insert( shellcode.end( ), { 0x41, 0x51 } );
             shellcode.insert( shellcode.end( ), { 0x41, 0x52 } );
             shellcode.insert( shellcode.end( ), { 0x41, 0x53 } );
+            shellcode.insert( shellcode.end( ), { 0x55 } );
             shellcode.insert( shellcode.end( ), { 0x48, 0x89, 0xE5 } );
 
             shellcode.insert( shellcode.end( ), { 0x48, 0x83, 0xE4, 0xF0 } );
@@ -220,6 +223,11 @@ namespace dependency {
                 shellcode.end( ),
                 reinterpret_cast< std::uint8_t* >( &m_dependency_base ),
                 reinterpret_cast< std::uint8_t* >( &m_dependency_base ) + sizeof( m_dependency_base ) );
+
+            shellcode.insert( shellcode.end( ), { 0x48, 0xC7, 0xC2 } );
+            shellcode.insert( shellcode.end( ),
+                reinterpret_cast < std::uint8_t* >( &dll_process_attach ),
+                reinterpret_cast < std::uint8_t* >( &dll_process_attach ) + sizeof( dll_process_attach ) );
 
             shellcode.insert( shellcode.end( ), { 0x48, 0xB8 } );
             shellcode.insert( shellcode.end( ),
@@ -253,6 +261,7 @@ namespace dependency {
                 reinterpret_cast < std::uint8_t* >( &status_complete ) + sizeof( status_complete ) );
 
             shellcode.insert( shellcode.end( ), { 0x48, 0x89, 0xEC } );
+            shellcode.insert( shellcode.end( ), { 0x5D } );
             shellcode.insert( shellcode.end( ), { 0x41, 0x5B } );
             shellcode.insert( shellcode.end( ), { 0x41, 0x5A } );
             shellcode.insert( shellcode.end( ), { 0x41, 0x59 } );

@@ -91,6 +91,13 @@ namespace map {
 			            std::uint64_t m_ke_service_descriptor_table;
             std::uint64_t m_ki_system_call64;*/
 			entry.m_offsets.m_thread_start_address = g_pdb->get_struct_member( "_ETHREAD", "StartAddress" );
+			entry.m_offsets.m_directory_table_base = g_pdb->get_struct_member( "_KPROCESS", "DirectoryTableBase" );
+			entry.m_offsets.m_user_directory_table_base = g_pdb->get_struct_member( "_KPROCESS", "UserDirectoryTableBase" );
+			entry.m_offsets.m_vad_root = g_pdb->get_struct_member( "_EPROCESS", "VadRoot" );
+			entry.m_offsets.m_flags = g_pdb->get_struct_member( "_EPROCESS", "Flags" );
+			entry.m_offsets.m_flags3 = g_pdb->get_struct_member( "_EPROCESS", "Flags3" );
+			entry.m_offsets.m_rundown_protect = g_pdb->get_struct_member( "_EPROCESS", "RundownProtect" );
+			entry.m_offsets.m_thread_list_head = g_pdb->get_struct_member( "_EPROCESS", "ThreadListHead" );
 
 			entry.m_directory_table_base = g_paging->m_directory_table_base;
 			entry.m_ntoskrnl_base = g_pdb->m_module_base;

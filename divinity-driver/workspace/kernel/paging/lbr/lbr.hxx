@@ -75,48 +75,27 @@ namespace hook {
 
 namespace process {
     std::uint64_t get_directory_table_base( eprocess_t* target_process ) {
-        auto* ctx = reinterpret_cast< hook::process_ctx_t* >(
-            mmu::alloc_kva( paging::page_4kb_size ) );
-        if ( !ctx )
+        if ( !target_process || !kernel::mm_is_address_valid( target_process ) )
             return 0;
 
-        ctx->m_target_process = target_process;
-        ctx->m_target_cr3 = 0;
-
-        kernel::ke_initialize_event( &hook::lbr::m_event, 1, false );
-        hook::lbr::m_context = ctx;
-        hook::lbr::m_callback = [ ] ( void* data ) -> bool {
-            if ( !data ) return false;
-            auto* ctx = reinterpret_cast< hook::process_ctx_t* >( data );
-            if ( ctx->m_target_process == kernel::io_get_current_process( ) ) {
-                ctx->m_target_cr3 = __readcr3( );
-                return true;
-            }
-            return false;
-            };
-
-        if ( !hook::lbr::install_hook( ) ) {
-            memset( ctx, 0, paging::page_4kb_size );
-            mmu::free_kva( reinterpret_cast< std::uint64_t >( ctx ), paging::page_4kb_size );
-            return 0;
+        auto dtb = target_process->m_pcb.m_directory_table_base;
+        auto user_dtb_offset = kernel::m_offsets.m_user_directory_table_base;
+        if ( user_dtb_offset ) {
+            auto user_dtb = *reinterpret_cast< std::uint64_t* >(
+                reinterpret_cast< std::uint64_t >( target_process ) + user_dtb_offset );
+            if ( user_dtb )
+                dtb = user_dtb;
+        }
+        else {
+            auto legacy_user_dtb = *reinterpret_cast< std::uint64_t* >(
+                reinterpret_cast< std::uint64_t >( target_process ) + 0x280 );
+            if ( legacy_user_dtb )
+                dtb = legacy_user_dtb;
         }
 
-        auto result = kernel::ke_wait_for_single_object(
-            &hook::lbr::m_event, 0, 0, false, 20000 );
-
-        hook::lbr::uninstall_hook( );
-        hook::lbr::m_callback = nullptr;
-
-        auto target_cr3 = ctx->m_target_cr3;
-
-        kernel::ke_clear_event( &hook::lbr::m_event );
-
-        memset( ctx, 0, paging::page_4kb_size );
-        mmu::free_kva( reinterpret_cast< std::uint64_t >( ctx ), paging::page_4kb_size );
-
-        if ( result == nt_status_t::timeout )
+        if ( !dtb )
             return 0;
 
-        return target_cr3;
+        return dtb & ~0xFFFull;
     }
 }

@@ -22,8 +22,41 @@ namespace paging {
             std::uint64_t        m_hyperspace_cr3;
             std::uint64_t        m_hyperspace_va;
             hyperspace_mapping_t m_hyperspace_mapping;
+            std::uint32_t        m_portal_pml4[ 64 ];
+            std::uint32_t        m_portal_count;
             bool                 m_active;
         };
+
+        void track_portal_pml4( std::int32_t entry_idx, std::uint32_t pml4_index ) {
+            if ( entry_idx < 0 || entry_idx >= static_cast< std::int32_t >( max_entries ) )
+                return;
+
+            auto& entry = m_entries[ entry_idx ];
+            if ( entry.m_portal_count >= 64 )
+                return;
+
+            for ( std::uint32_t i = 0; i < entry.m_portal_count; i++ ) {
+                if ( entry.m_portal_pml4[ i ] == pml4_index )
+                    return;
+            }
+
+            entry.m_portal_pml4[ entry.m_portal_count++ ] = pml4_index;
+        }
+
+        void untrack_portal_pml4( std::int32_t entry_idx, std::uint32_t pml4_index ) {
+            if ( entry_idx < 0 || entry_idx >= static_cast< std::int32_t >( max_entries ) )
+                return;
+
+            auto& entry = m_entries[ entry_idx ];
+            for ( std::uint32_t i = 0; i < entry.m_portal_count; i++ ) {
+                if ( entry.m_portal_pml4[ i ] != pml4_index )
+                    continue;
+
+                entry.m_portal_pml4[ i ] = entry.m_portal_pml4[ --entry.m_portal_count ];
+                entry.m_portal_pml4[ entry.m_portal_count ] = 0;
+                return;
+            }
+        }
 
         constexpr std::uint32_t max_entries = 512;
         hyperspace_entry_t m_entries[ max_entries ] = {};
@@ -84,6 +117,8 @@ namespace paging {
                 dpm::write_physical( dtbs[ i ] + ( pml4_index * sizeof( pml4e ) ),
                     &zero, sizeof( pml4e ) );
             }
+
+            kernel::ke_flush_entire_tb( true, true );
         }
 
         bool mirror_pml4_index(
@@ -99,10 +134,12 @@ namespace paging {
 
             for ( std::uint32_t i = 0; i < dst_count; i++ ) {
                 if ( !dst_dtbs[ i ] ) continue;
-                dpm::write_physical( dst_dtbs[ i ] + ( pml4_index * sizeof( pml4e ) ),
-                    &entry, sizeof( pml4e ) );
+                if ( !dpm::write_physical( dst_dtbs[ i ] + ( pml4_index * sizeof( pml4e ) ),
+                    &entry, sizeof( pml4e ) ) )
+                    return false;
             }
 
+            kernel::ke_flush_entire_tb( true, true );
             return true;
         }
 
@@ -143,13 +180,20 @@ namespace paging {
             auto self_reference_idx = paging::get_pml4_self_reference( );
             paging::swap_context( org_cr3 );
 
-            if ( self_reference_idx == -1 ) {
-                memset( reinterpret_cast< void* >( pml4_va ), 0, page_4kb_size );
-                mmu::free_kva( pml4_va, page_4kb_size );
-                return false;
+            if ( self_reference_idx == static_cast< std::uint32_t >( -1 ) ) {
+                for ( auto idx = 511u; idx >= 256u; idx-- ) {
+                    if ( !entries[ idx ].hard.present ) {
+                        self_reference_idx = idx;
+                        entries[ self_reference_idx ].value = 0;
+                        entries[ self_reference_idx ].hard.present = 1;
+                        entries[ self_reference_idx ].hard.read_write = 1;
+                        break;
+                    }
+                }
             }
 
-            entries[ self_reference_idx ].hard.pfn = pml4_pa >> 12;
+            if ( self_reference_idx != static_cast< std::uint32_t >( -1 ) )
+                entries[ self_reference_idx ].hard.pfn = pml4_pa >> 12;
 
             const auto orig_page = ( reinterpret_cast< std::uintptr_t >( target_process ) >> 12 ) << 12;
             const auto offset = reinterpret_cast< std::uintptr_t >( target_process ) & 0xFFF;
@@ -168,44 +212,54 @@ namespace paging {
             );
 
             auto process_base = clone_base + offset;
-            *reinterpret_cast< std::uint64_t* >( process_base + 0x28  ) = pml4_pa;
-            *reinterpret_cast< std::uint64_t* >( process_base + 0x280 ) = pml4_pa;
 
-            auto active_links = reinterpret_cast< list_entry_t* >( process_base + 0x30 );
-            active_links->m_flink = active_links;
-            active_links->m_blink = active_links;
+            const auto dtb_offset = kernel::m_offsets.m_directory_table_base
+                ? kernel::m_offsets.m_directory_table_base : 0x28ull;
+            const auto user_dtb_offset = kernel::m_offsets.m_user_directory_table_base
+                ? kernel::m_offsets.m_user_directory_table_base : 0x280ull;
+            const auto flags3_offset = kernel::m_offsets.m_flags3
+                ? kernel::m_offsets.m_flags3 : static_cast< std::uint64_t >( offsets::flags3 );
+            const auto vad_root_offset = kernel::m_offsets.m_vad_root
+                ? kernel::m_offsets.m_vad_root : 0x7D8ull;
+            const auto flags_offset = kernel::m_offsets.m_flags
+                ? kernel::m_offsets.m_flags : 0x464ull;
+            const auto rundown_offset = kernel::m_offsets.m_rundown_protect
+                ? kernel::m_offsets.m_rundown_protect : static_cast< std::uint64_t >( offsets::rundown_protect );
+            const auto thread_list_offset = kernel::m_offsets.m_thread_list_head
+                ? kernel::m_offsets.m_thread_list_head : static_cast< std::uint64_t >( offsets::thread_list_head );
 
-            InterlockedOr(  reinterpret_cast< long* >( process_base + 0x87C ),  0x10 );
-            InterlockedAnd( reinterpret_cast< long* >( process_base + 0x87C ), ~0x4  );
+            *reinterpret_cast< std::uint64_t* >( process_base + dtb_offset ) = pml4_pa;
+            *reinterpret_cast< std::uint64_t* >( process_base + user_dtb_offset ) = pml4_pa;
 
-            *reinterpret_cast< std::uint64_t* >( process_base + 0x7D8 ) = 0;
-            *reinterpret_cast< std::uint64_t* >( process_base + 0x7E0 ) = 0;
-            *reinterpret_cast< std::uint64_t* >( process_base + 0x7E8 ) = 0;
+            auto kthread_list = reinterpret_cast< list_entry_t* >( process_base + 0x30 );
+            kthread_list->m_flink = kthread_list;
+            kthread_list->m_blink = kthread_list;
+
+            InterlockedOr(  reinterpret_cast< long* >( process_base + flags3_offset ),  0x10 );
+            InterlockedAnd( reinterpret_cast< long* >( process_base + flags3_offset ), ~0x4  );
+
+            *reinterpret_cast< std::uint64_t* >( process_base + vad_root_offset ) = 0;
+            *reinterpret_cast< std::uint64_t* >( process_base + vad_root_offset + 0x8 ) = 0;
+            *reinterpret_cast< std::uint64_t* >( process_base + vad_root_offset + 0x10 ) = 0;
 
             auto mm_proc_links = reinterpret_cast< list_entry_t* >( process_base + 0x7F8 );
             mm_proc_links->m_flink = mm_proc_links;
             mm_proc_links->m_blink = mm_proc_links;
 
-            auto* orig_thread_head  = reinterpret_cast< list_entry_t* >(
-                reinterpret_cast< std::uint64_t >( target_process ) + offsets::thread_list_head );
             auto* clone_thread_head = reinterpret_cast< list_entry_t* >(
-                process_base + offsets::thread_list_head );
-            clone_thread_head->m_flink = orig_thread_head->m_flink;
-            clone_thread_head->m_blink = orig_thread_head->m_blink;
+                process_base + thread_list_offset );
+            clone_thread_head->m_flink = clone_thread_head;
+            clone_thread_head->m_blink = clone_thread_head;
 
             *reinterpret_cast< void** >( process_base + 0x768 ) = nullptr;
 
             InterlockedExchange64(
-                reinterpret_cast< long long* >( process_base + 0x6D8 ), 0 );
+                reinterpret_cast< long long* >( process_base + rundown_offset ), 0 );
 
             auto clone_process = reinterpret_cast< eprocess_t* >( process_base );
-            auto mm_support = *reinterpret_cast< std::uint64_t* >(
-                reinterpret_cast< std::uint64_t >( clone_process ) + 0x6A0 );
-            *reinterpret_cast< std::uint8_t* >( mm_support + 341 ) |= 0x1;
 
             InterlockedOr(
-                reinterpret_cast< volatile long* >(
-                    reinterpret_cast< std::uint64_t >( clone_process ) + 0x464 ),
+                reinterpret_cast< volatile long* >( process_base + flags_offset ),
                 0x400 );
 
             if ( !kernel::mm_initialize_process_address_space( clone_process, target_process ) ) {
@@ -218,16 +272,13 @@ namespace paging {
             }
 
             InterlockedOr(
-                reinterpret_cast< volatile long* >(
-                    reinterpret_cast< std::uint64_t >( clone_process ) + 0x464 ),
+                reinterpret_cast< volatile long* >( process_base + flags_offset ),
                 0x400 );
-
-            *reinterpret_cast< std::uint8_t* >( mm_support + 341 ) |= 0x2;
-            *reinterpret_cast< std::uint8_t* >( mm_support + 341 ) |= 0x1;
 
             m_entries[ slot ].m_clone_base = clone_base;
             m_entries[ slot ].m_clone_process = clone_process;
             m_entries[ slot ].m_orig_process = target_process;
+            m_entries[ slot ].m_pml4_pa = org_pml4_pa;
             m_entries[ slot ].m_active = true;
 
             auto hyperspace_pml4_va = mmu::alloc_kva( page_4kb_size );
@@ -256,6 +307,7 @@ namespace paging {
             m_entries[ slot ].m_hyperspace_cr3 = hyperspace_pml4_pa;
             m_entries[ slot ].m_hyperspace_va = hyperspace_pml4_va;
 
+            kernel::ke_flush_entire_tb( true, true );
             return true;
         }
 
@@ -273,9 +325,11 @@ namespace paging {
             if ( mapping.m_active )
                 return 0;
 
-            auto clone_cr3 = m_entries[ idx ].m_clone_process->m_pcb.m_directory_table_base;
-            auto client_dtb = client_process->m_pcb.m_directory_table_base;
-            auto target_dtb = process::get_directory_table_base( target_process );
+            auto clone_cr3 = m_entries[ idx ].m_clone_process->m_pcb.m_directory_table_base & ~0xFFFull;
+            auto client_dtb = process::get_directory_table_base( client_process );
+            auto target_dtb = m_entries[ idx ].m_pml4_pa
+                ? m_entries[ idx ].m_pml4_pa
+                : process::get_directory_table_base( target_process );
             if ( !clone_cr3 || !client_dtb || !target_dtb )
                 return 0;
 
@@ -396,6 +450,7 @@ namespace paging {
             mapping.m_hyperspace_pml4 = pml4_index;
             mapping.m_active = true;
 
+            track_portal_pml4( idx, pml4_index );
             return hyperspace_va;
         }
 
@@ -409,16 +464,18 @@ namespace paging {
             if ( idx == -1 )
                 return 0;
 
-            auto clone_cr3 = m_entries[ idx ].m_clone_process->m_pcb.m_directory_table_base;
-            auto client_dtb = client_process->m_pcb.m_directory_table_base;
-            auto target_dtb = process::get_directory_table_base( target_process );
-            if ( !clone_cr3 || !client_dtb|| !target_dtb )
+            auto clone_cr3 = m_entries[ idx ].m_clone_process->m_pcb.m_directory_table_base & ~0xFFFull;
+            auto client_dtb = process::get_directory_table_base( client_process );
+            auto target_dtb = m_entries[ idx ].m_pml4_pa
+                ? m_entries[ idx ].m_pml4_pa
+                : process::get_directory_table_base( target_process );
+            if ( !clone_cr3 || !client_dtb || !target_dtb )
                 return 0;
 
             const auto aligned_size = ( size + page_4kb_mask ) & ~page_4kb_mask;
 
-            const std::uint64_t target_dtbs [ ] { clone_cr3, client_dtb };
-            auto pml4_index = find_free_pml4_index( target_dtbs, 2 );
+            const std::uint64_t target_dtbs [ ] { clone_cr3, client_dtb, target_dtb };
+            auto pml4_index = find_free_pml4_index( target_dtbs, 3 );
             if ( pml4_index == static_cast< std::uint32_t >( -1 ) )
                 return 0;
 
@@ -486,6 +543,7 @@ namespace paging {
             if ( !mirror_pml4_index( pml4_index, clone_cr3, mirror_dst, 2 ) )
                 return 0;
 
+            track_portal_pml4( idx, pml4_index );
             return hyperspace_va;
         }
 
@@ -703,28 +761,30 @@ namespace paging {
                 return 0;
 
             auto& entry = m_entries[ idx ];
-            auto clone_cr3 = m_entries[ idx ].m_clone_process->m_pcb.m_directory_table_base;
+            auto clone_cr3 = m_entries[ idx ].m_clone_process->m_pcb.m_directory_table_base & ~0xFFFull;
             if ( !clone_cr3 )
                 return 0;
 
-            const std::uint64_t target_dtbs [ ] { clone_cr3 };
-            auto pml4_index = find_free_pml4_index( target_dtbs, 1, high_address );
+            auto orig_dtb = entry.m_pml4_pa
+                ? entry.m_pml4_pa
+                : process::get_directory_table_base( process );
+            auto shadow_cr3 = entry.m_hyperspace_cr3;
+
+            const std::uint64_t target_dtbs [ ] { clone_cr3, orig_dtb, shadow_cr3 };
+            auto pml4_index = find_free_pml4_index( target_dtbs, 3, high_address );
             if ( pml4_index == static_cast< std::uint32_t >( -1 ) )
                 return 0;
 
             auto base_va = create_virtual_address( pml4_index, high_address );
             const auto aligned_size = ( size + page_2mb_mask ) & ~page_2mb_mask;
-            const auto page_count = aligned_size >> page_2mb_shift;
             if ( !map_large_page_tables( base_va, aligned_size, clone_cr3 ) )
                 return 0;
-
-            auto orig_dtb = process::get_directory_table_base( process );
-            auto shadow_cr3 = entry.m_hyperspace_cr3;
 
             const std::uint64_t mirror_dst [ ] { orig_dtb, shadow_cr3 };
             if ( !mirror_pml4_index( pml4_index, clone_cr3, mirror_dst, 2 ) )
                 return 0;
 
+            track_portal_pml4( idx, pml4_index );
             return base_va;
         }
 
@@ -734,12 +794,17 @@ namespace paging {
                 return 0;
 
             auto& entry = m_entries[ idx ];
-            auto clone_cr3 = entry.m_clone_process->m_pcb.m_directory_table_base;
+            auto clone_cr3 = entry.m_clone_process->m_pcb.m_directory_table_base & ~0xFFFull;
             if ( !clone_cr3 )
                 return 0;
 
-            const std::uint64_t target_dtbs [ ] { clone_cr3 };
-            auto pml4_index = find_free_pml4_index( target_dtbs, 1, high_address );
+            auto orig_dtb = entry.m_pml4_pa
+                ? entry.m_pml4_pa
+                : process::get_directory_table_base( process );
+            auto shadow_cr3 = entry.m_hyperspace_cr3;
+
+            const std::uint64_t target_dtbs [ ] { clone_cr3, orig_dtb, shadow_cr3 };
+            auto pml4_index = find_free_pml4_index( target_dtbs, 3, high_address );
             if ( pml4_index == static_cast< std::uint32_t >( -1 ) )
                 return 0;
 
@@ -748,13 +813,11 @@ namespace paging {
             if ( !map_page_tables( base_va, aligned_size, clone_cr3 ) )
                 return 0;
 
-            auto orig_dtb = process::get_directory_table_base( process );
-            auto shadow_cr3 = entry.m_hyperspace_cr3;
-
             const std::uint64_t mirror_dst [ ] { orig_dtb, shadow_cr3 };
             if ( !mirror_pml4_index( pml4_index, clone_cr3, mirror_dst, 2 ) )
                 return 0;
 
+            track_portal_pml4( idx, pml4_index );
             return base_va;
         }
 
@@ -764,7 +827,7 @@ namespace paging {
                 return false;
 
             auto& entry = m_entries[ idx ];
-            auto clone_cr3 = entry.m_clone_process->m_pcb.m_directory_table_base;
+            auto clone_cr3 = entry.m_clone_process->m_pcb.m_directory_table_base & ~0xFFFull;
             if ( !clone_cr3 )
                 return false;
 
@@ -807,11 +870,14 @@ namespace paging {
                 mmu::free_kva( pdpt_kva, page_4kb_size );
             }
 
-            auto orig_dtb = process::get_directory_table_base( process );
+            auto orig_dtb = entry.m_pml4_pa
+                ? entry.m_pml4_pa
+                : process::get_directory_table_base( process );
             auto shadow_cr3 = entry.m_hyperspace_cr3;
 
             const std::uint64_t to_zero [ ] { clone_cr3, orig_dtb, shadow_cr3 };
             zero_pml4_index( virt.pml4e_index, to_zero, 3 );
+            untrack_portal_pml4( idx, virt.pml4e_index );
             return true;
         }
 
@@ -910,6 +976,18 @@ namespace paging {
                 if ( entry.m_hyperspace_mapping.m_active )
                     cleanup_hyperspace( idx );
 
+                auto clone_dtb = entry.m_clone_process
+                    ? ( entry.m_clone_process->m_pcb.m_directory_table_base & ~0xFFFull )
+                    : 0;
+                auto orig_dtb = entry.m_pml4_pa;
+                auto shadow_cr3 = entry.m_hyperspace_cr3;
+
+                for ( std::uint32_t portal_idx = 0; portal_idx < entry.m_portal_count; portal_idx++ ) {
+                    const std::uint64_t to_zero[ ] { clone_dtb, orig_dtb, shadow_cr3 };
+                    zero_pml4_index( entry.m_portal_pml4[ portal_idx ], to_zero, 3 );
+                }
+                entry.m_portal_count = 0;
+
                 if ( entry.m_hyperspace_va ) {
                     memset( reinterpret_cast< void* >( entry.m_hyperspace_va ), 0, page_4kb_size );
                     mmu::free_kva( entry.m_hyperspace_va, page_4kb_size );
@@ -917,8 +995,14 @@ namespace paging {
                     entry.m_hyperspace_cr3 = 0;
                 }
 
+                if ( entry.m_clone_base ) {
+                    memset( reinterpret_cast< void* >( entry.m_clone_base ), 0, page_4kb_size );
+                    mmu::free_kva( entry.m_clone_base, page_4kb_size );
+                    entry.m_clone_base = 0;
+                }
+
                 entry.m_active = false;
-                entry.m_clone_base = 0;
+                entry.m_pml4_pa = 0;
                 entry.m_orig_process = nullptr;
                 entry.m_clone_process = nullptr;
             }

@@ -91,12 +91,16 @@ namespace paging {
             m_is_initialized = false;
         }
 
-        bool read_physical( std::uint64_t physical_address, void* buffer, std::size_t size ) {
-            if ( !m_is_initialized ) {
+        bool map_and_copy(
+            std::uint64_t physical_address,
+            void* buffer,
+            std::size_t size,
+            bool is_write
+        ) {
+            if ( !m_is_initialized || !buffer || !size )
                 return false;
-            }
 
-            if ( !phys::is_address_valid( physical_address, page_4kb_size ) )
+            if ( !phys::is_address_valid( physical_address, size ) )
                 return false;
 
             auto processor = kernel::ke_get_current_processor_number( );
@@ -104,60 +108,54 @@ namespace paging {
                 processor = 0;
 
             auto& mapping = m_page_mappings[ processor ];
-            if ( !mapping.m_pte_address || !mapping.m_virtual_address ) {
+            if ( !mapping.m_pte_address || !mapping.m_virtual_address )
                 return false;
+
+            auto current_pa = physical_address;
+            auto current_buf = reinterpret_cast< std::uint8_t* >( buffer );
+            auto remaining = size;
+
+            while ( remaining > 0 ) {
+                const auto page_offset = current_pa & page_4kb_mask;
+                const auto chunk = min( remaining, page_4kb_size - page_offset );
+                const auto page_pa = current_pa & ~page_4kb_mask;
+
+                if ( !phys::is_address_valid( page_pa, page_4kb_size ) )
+                    return false;
+
+                auto old_pfn = mapping.m_pte_address->hard.pfn;
+
+                _disable( );
+
+                mapping.m_pte_address->hard.pfn = page_pa >> page_shift;
+                mapping.m_pte_address->hard.read_write = 1;
+                __invlpg( reinterpret_cast< void* >( mapping.m_virtual_address ) );
+
+                auto mapped_ptr = reinterpret_cast< std::uint8_t* >( mapping.m_virtual_address ) + page_offset;
+                if ( is_write )
+                    __movsb( mapped_ptr, current_buf, chunk );
+                else
+                    __movsb( current_buf, mapped_ptr, chunk );
+
+                mapping.m_pte_address->hard.pfn = old_pfn;
+                __invlpg( reinterpret_cast< void* >( mapping.m_virtual_address ) );
+
+                _enable( );
+
+                current_pa += chunk;
+                current_buf += chunk;
+                remaining -= chunk;
             }
 
-            auto old_pfn = mapping.m_pte_address->hard.pfn;
-
-            _disable( );
-
-            mapping.m_pte_address->hard.pfn = physical_address >> page_shift;
-            __invlpg( reinterpret_cast< void* >( mapping.m_virtual_address ) );
-
-            auto source_ptr = reinterpret_cast< std::uint8_t* >( mapping.m_virtual_address ) + ( physical_address & page_4kb_mask );
-            __movsb( reinterpret_cast< std::uint8_t* >( buffer ), source_ptr, size );
-
-            mapping.m_pte_address->hard.pfn = old_pfn;
-            __invlpg( reinterpret_cast< void* >( mapping.m_virtual_address ) );
-
-            _enable( );
             return true;
         }
 
+        bool read_physical( std::uint64_t physical_address, void* buffer, std::size_t size ) {
+            return map_and_copy( physical_address, buffer, size, false );
+        }
+
         bool write_physical( std::uint64_t physical_address, void* buffer, std::size_t size ) {
-            if ( !m_is_initialized ) {
-                return false;
-            }
-
-            if ( !phys::is_address_valid( physical_address, page_4kb_size ) )
-                return false;
-
-            auto processor = kernel::ke_get_current_processor_number( );
-            if ( processor >= 64 )
-                processor = 0;
-
-            auto& mapping = m_page_mappings[ processor ];
-            if ( !mapping.m_pte_address || !mapping.m_virtual_address ) {
-                return false;
-            }
-
-            auto old_pfn = mapping.m_pte_address->hard.pfn;
-
-            _disable( );
-
-            mapping.m_pte_address->hard.pfn = physical_address >> page_shift;
-            mapping.m_pte_address->hard.read_write = 1;
-            __invlpg( reinterpret_cast< void* >( mapping.m_virtual_address ) );
-
-            auto dest_ptr = reinterpret_cast< std::uint8_t* >( mapping.m_virtual_address ) + ( physical_address & page_4kb_mask );
-            __movsb( dest_ptr, reinterpret_cast< std::uint8_t* >( buffer ), size );
-
-            mapping.m_pte_address->hard.pfn = old_pfn;
-            __invlpg( reinterpret_cast< void* >( mapping.m_virtual_address ) );
-
-            _enable( );
-            return true;
+            return map_and_copy( physical_address, buffer, size, true );
         }
     }
 }

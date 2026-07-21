@@ -82,9 +82,12 @@ int main( int argc, char** argv ) {
 
 	if ( !dependency->inject( ) ) {
 		logging::print( oxorany( "Could not inject dependency." ) );
+		g_portal->free_all( );
 		return std::getchar( );
 	}
 
 	dependency->cleanup( );
+	logging::print( oxorany( "Portal allocations are released on target process exit" ) );
+	logging::print( oxorany( "Press enter to exit injector (keep target running)" ) );
 	return std::getchar( );
 }
