@@ -64,6 +64,216 @@ namespace pdb {
 
     static ComInitializer g_com_init;
 
+    inline bool dia_file_exists( const std::wstring& path ) {
+        return GetFileAttributesW( path.c_str( ) ) != INVALID_FILE_ATTRIBUTES;
+    }
+
+    inline void dia_add_candidate( std::vector<std::wstring>& candidates, const std::wstring& path ) {
+        if ( !dia_file_exists( path ) )
+            return;
+        for ( const auto& existing : candidates ) {
+            if ( _wcsicmp( existing.c_str( ), path.c_str( ) ) == 0 )
+                return;
+        }
+        candidates.push_back( path );
+    }
+
+    inline void dia_add_named_candidates( std::vector<std::wstring>& candidates, const std::wstring& directory ) {
+        if ( directory.empty( ) )
+            return;
+
+        std::wstring root = directory;
+        if ( root.back( ) != L'\\' && root.back( ) != L'/' )
+            root.push_back( L'\\' );
+
+        static const wchar_t* names[ ] = { L"msdia140.dll", L"msdia120.dll", L"msdia110.dll" };
+        for ( const auto* name : names )
+            dia_add_candidate( candidates, root + name );
+    }
+
+    inline void dia_add_vs_install_candidates( std::vector<std::wstring>& candidates, const std::wstring& install_dir ) {
+        if ( install_dir.empty( ) )
+            return;
+
+        std::wstring root = install_dir;
+        if ( root.back( ) != L'\\' && root.back( ) != L'/' )
+            root.push_back( L'\\' );
+
+        dia_add_named_candidates( candidates, root + L"DIA SDK\\bin\\amd64" );
+        dia_add_named_candidates( candidates, root + L"DIA SDK\\bin" );
+    }
+
+    inline void dia_add_vswhere_candidates( std::vector<std::wstring>& candidates ) {
+        wchar_t program_files_x86[ MAX_PATH ]{};
+        if ( !GetEnvironmentVariableW( L"ProgramFiles(x86)", program_files_x86, MAX_PATH ) )
+            return;
+
+        std::wstring vswhere = std::wstring( program_files_x86 ) + L"\\Microsoft Visual Studio\\Installer\\vswhere.exe";
+        if ( !dia_file_exists( vswhere ) )
+            return;
+
+        SECURITY_ATTRIBUTES security{};
+        security.nLength = sizeof( security );
+        security.bInheritHandle = TRUE;
+
+        HANDLE read_pipe = nullptr;
+        HANDLE write_pipe = nullptr;
+        if ( !CreatePipe( &read_pipe, &write_pipe, &security, 0 ) )
+            return;
+
+        SetHandleInformation( read_pipe, HANDLE_FLAG_INHERIT, 0 );
+
+        STARTUPINFOW startup{};
+        startup.cb = sizeof( startup );
+        startup.dwFlags = STARTF_USESTDHANDLES;
+        startup.hStdOutput = write_pipe;
+        startup.hStdError = write_pipe;
+
+        std::wstring command = L"\"" + vswhere + L"\" -latest -products * -property installationPath";
+        std::vector<wchar_t> command_line( command.begin( ), command.end( ) );
+        command_line.push_back( L'\0' );
+
+        PROCESS_INFORMATION process{};
+        BOOL created = CreateProcessW(
+            nullptr,
+            command_line.data( ),
+            nullptr,
+            nullptr,
+            TRUE,
+            CREATE_NO_WINDOW,
+            nullptr,
+            nullptr,
+            &startup,
+            &process
+        );
+
+        CloseHandle( write_pipe );
+
+        if ( !created ) {
+            CloseHandle( read_pipe );
+            return;
+        }
+
+        std::string output;
+        char buffer[ 512 ];
+        DWORD bytes_read = 0;
+        while ( ReadFile( read_pipe, buffer, sizeof( buffer ), &bytes_read, nullptr ) && bytes_read )
+            output.append( buffer, buffer + bytes_read );
+
+        WaitForSingleObject( process.hProcess, 5000 );
+        CloseHandle( process.hThread );
+        CloseHandle( process.hProcess );
+        CloseHandle( read_pipe );
+
+        while ( !output.empty( ) && ( output.back( ) == '\r' || output.back( ) == '\n' || output.back( ) == ' ' ) )
+            output.pop_back( );
+
+        if ( output.empty( ) )
+            return;
+
+        dia_add_vs_install_candidates( candidates, std::wstring( output.begin( ), output.end( ) ) );
+    }
+
+    inline std::vector<std::wstring> dia_find_candidates( ) {
+        std::vector<std::wstring> candidates;
+
+        wchar_t module_path[ MAX_PATH ]{};
+        if ( GetModuleFileNameW( nullptr, module_path, MAX_PATH ) ) {
+            std::wstring exe_dir( module_path );
+            auto slash = exe_dir.find_last_of( L"\\/" );
+            if ( slash != std::wstring::npos )
+                dia_add_named_candidates( candidates, exe_dir.substr( 0, slash ) );
+        }
+
+        wchar_t vs_install[ MAX_PATH ]{};
+        if ( GetEnvironmentVariableW( L"VSINSTALLDIR", vs_install, MAX_PATH ) )
+            dia_add_vs_install_candidates( candidates, vs_install );
+
+        dia_add_vswhere_candidates( candidates );
+
+        static const wchar_t* roots[ ] = {
+            L"C:\\Program Files\\Microsoft Visual Studio\\",
+            L"C:\\Program Files (x86)\\Microsoft Visual Studio\\"
+        };
+        static const wchar_t* years[ ] = { L"18", L"2022", L"2025", L"2019", L"2017" };
+        static const wchar_t* editions[ ] = { L"Community", L"Professional", L"Enterprise", L"BuildTools" };
+
+        for ( const auto* root : roots ) {
+            for ( const auto* year : years ) {
+                for ( const auto* edition : editions )
+                    dia_add_vs_install_candidates( candidates, std::wstring( root ) + year + L"\\" + edition );
+            }
+        }
+
+        static const wchar_t* bare_names[ ] = { L"msdia140.dll", L"msdia120.dll", L"msdia110.dll" };
+        for ( const auto* name : bare_names )
+            candidates.emplace_back( name );
+
+        return candidates;
+    }
+
+    inline HRESULT dia_create_from_module( HMODULE module, IDiaDataSource** out_source ) {
+        if ( !module || !out_source )
+            return E_INVALIDARG;
+
+        using dll_get_class_object_t = HRESULT( STDAPICALLTYPE* )( REFCLSID, REFIID, LPVOID* );
+        auto dll_get_class_object = reinterpret_cast< dll_get_class_object_t >(
+            GetProcAddress( module, "DllGetClassObject" )
+        );
+        if ( !dll_get_class_object )
+            return HRESULT_FROM_WIN32( GetLastError( ) );
+
+        IClassFactory* factory = nullptr;
+        HRESULT hr = dll_get_class_object( CLSID_DiaSource, IID_IClassFactory, reinterpret_cast< void** >( &factory ) );
+        if ( FAILED( hr ) || !factory )
+            return hr;
+
+        hr = factory->CreateInstance( nullptr, IID_IDiaDataSource, reinterpret_cast< void** >( out_source ) );
+        factory->Release( );
+        return hr;
+    }
+
+    inline HRESULT dia_create_data_source( IDiaDataSource** out_source ) {
+        if ( !out_source )
+            return E_INVALIDARG;
+
+        *out_source = nullptr;
+
+        HRESULT hr = CoCreateInstance(
+            CLSID_DiaSource,
+            nullptr,
+            CLSCTX_INPROC_SERVER,
+            IID_IDiaDataSource,
+            reinterpret_cast< void** >( out_source )
+        );
+        if ( SUCCEEDED( hr ) && *out_source )
+            return hr;
+
+        const auto candidates = dia_find_candidates( );
+        for ( const auto& candidate : candidates ) {
+            hr = NoRegCoCreate(
+                candidate.c_str( ),
+                CLSID_DiaSource,
+                IID_IDiaDataSource,
+                reinterpret_cast< void** >( out_source )
+            );
+            if ( SUCCEEDED( hr ) && *out_source )
+                return hr;
+
+            HMODULE module = LoadLibraryExW( candidate.c_str( ), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH );
+            if ( !module && candidate.find( L'\\' ) == std::wstring::npos && candidate.find( L'/' ) == std::wstring::npos )
+                module = LoadLibraryW( candidate.c_str( ) );
+            if ( !module )
+                continue;
+
+            hr = dia_create_from_module( module, out_source );
+            if ( SUCCEEDED( hr ) && *out_source )
+                return hr;
+        }
+
+        return HRESULT_FROM_WIN32( ERROR_MOD_NOT_FOUND );
+    }
+
     struct pdb_info {
         DWORD signature;
         GUID guid;
@@ -111,19 +321,11 @@ namespace pdb {
             }
 
             com_ptr<IDiaDataSource> pSource;
-            HRESULT hr = CoCreateInstance( CLSID_DiaSource, NULL, CLSCTX_INPROC_SERVER,
-                IID_IDiaDataSource, ( void** )&pSource );
-
-            if ( FAILED( hr ) ) {
-                const wchar_t* dia_versions[ ] = { L"msdia140.dll", L"msdia120.dll", L"msdia110.dll" };
-                for ( const auto& dll : dia_versions ) {
-                    hr = NoRegCoCreate( dll, CLSID_DiaSource, IID_IDiaDataSource, ( void** )&pSource );
-                    if ( SUCCEEDED( hr ) ) break;
-                }
-                if ( FAILED( hr ) ) {
-                    logging::print( oxorany( "failed to create DIA data source: 0x%08x" ), hr );
-                    return false;
-                }
+            HRESULT hr = dia_create_data_source( &pSource );
+            if ( FAILED( hr ) || !pSource ) {
+                logging::print( oxorany( "failed to create DIA data source: 0x%08x (msdia140.dll not found/registered)" ), hr );
+                logging::print( oxorany( "rebuild mapper or copy msdia140.dll next to divinity-mapper.exe" ) );
+                return false;
             }
 
             std::wstring wide_path( m_pdb_path.begin( ), m_pdb_path.end( ) );
