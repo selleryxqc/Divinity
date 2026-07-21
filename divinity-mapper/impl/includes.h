@@ -13,7 +13,6 @@
 #include <map>
 #include <dia2.h>
 #include <diacreate.h>
-#include <atlbase.h>
 #include <string>
 #include <memory>
 

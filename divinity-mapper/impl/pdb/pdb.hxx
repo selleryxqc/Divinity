@@ -1,6 +1,52 @@
 #pragma once
 
 namespace pdb {
+    template <typename T>
+    class com_ptr {
+    public:
+        com_ptr( ) = default;
+        com_ptr( T* pointer ) : m_pointer( pointer ) {}
+        com_ptr( const com_ptr& ) = delete;
+        com_ptr& operator=( const com_ptr& ) = delete;
+
+        ~com_ptr( ) {
+            Release( );
+        }
+
+        T** operator&( ) {
+            Release( );
+            return &m_pointer;
+        }
+
+        T* operator->( ) const {
+            return m_pointer;
+        }
+
+        operator T*( ) const {
+            return m_pointer;
+        }
+
+        explicit operator bool( ) const {
+            return m_pointer != nullptr;
+        }
+
+        T* Detach( ) {
+            T* pointer = m_pointer;
+            m_pointer = nullptr;
+            return pointer;
+        }
+
+        void Release( ) {
+            if ( m_pointer ) {
+                m_pointer->Release( );
+                m_pointer = nullptr;
+            }
+        }
+
+    private:
+        T* m_pointer = nullptr;
+    };
+
     class ComInitializer {
     public:
         ComInitializer( ) {
@@ -64,7 +110,7 @@ namespace pdb {
                 }
             }
 
-            CComPtr<IDiaDataSource> pSource;
+            com_ptr<IDiaDataSource> pSource;
             HRESULT hr = CoCreateInstance( CLSID_DiaSource, NULL, CLSCTX_INPROC_SERVER,
                 IID_IDiaDataSource, ( void** )&pSource );
 
@@ -96,14 +142,14 @@ namespace pdb {
                 }
             }
 
-            CComPtr<IDiaSession> pSession;
+            com_ptr<IDiaSession> pSession;
             hr = pSource->openSession( &pSession );
             if ( FAILED( hr ) ) {
                 logging::print( oxorany( "failed to open DIA session: 0x%08x" ), hr );
                 return false;
             }
 
-            CComPtr<IDiaSymbol> pGlobal;
+            com_ptr<IDiaSymbol> pGlobal;
             hr = pSession->get_globalScope( &pGlobal );
             if ( FAILED( hr ) ) {
                 logging::print( oxorany( "failed to get global scope: 0x%08x" ), hr );
@@ -132,9 +178,9 @@ namespace pdb {
         }
 
         std::uint64_t find_member_in_udt( IDiaSymbol* pUDT, const std::wstring& member_name, LONG base_offset ) {
-            CComPtr<IDiaEnumSymbols> pEnumData;
+            com_ptr<IDiaEnumSymbols> pEnumData;
             if ( SUCCEEDED( pUDT->findChildren( SymTagData, member_name.c_str( ), nsfCaseInsensitive, &pEnumData ) ) && pEnumData ) {
-                CComPtr<IDiaSymbol> pMember;
+                com_ptr<IDiaSymbol> pMember;
                 ULONG celt = 0;
                 if ( SUCCEEDED( pEnumData->Next( 1, &pMember, &celt ) ) && celt == 1 && pMember ) {
                     LONG offset = 0;
@@ -143,17 +189,17 @@ namespace pdb {
                 }
             }
 
-            CComPtr<IDiaEnumSymbols> pEnumBases;
+            com_ptr<IDiaEnumSymbols> pEnumBases;
             if ( FAILED( pUDT->findChildren( SymTagBaseClass, nullptr, nsNone, &pEnumBases ) ) || !pEnumBases )
                 return 0;
 
-            CComPtr<IDiaSymbol> pBase;
+            com_ptr<IDiaSymbol> pBase;
             ULONG celt = 0;
             while ( SUCCEEDED( pEnumBases->Next( 1, &pBase, &celt ) ) && celt == 1 ) {
                 LONG base_off = 0;
                 pBase->get_offset( &base_off );
 
-                CComPtr<IDiaSymbol> pBaseType;
+                com_ptr<IDiaSymbol> pBaseType;
                 if ( SUCCEEDED( pBase->get_type( &pBaseType ) ) && pBaseType ) {
                     auto result = find_member_in_udt( pBaseType, member_name, base_offset + base_off );
                     if ( result ) return result;
@@ -169,11 +215,11 @@ namespace pdb {
 
             std::wstring w_type( type_name, type_name + strlen( type_name ) );
 
-            CComPtr<IDiaEnumSymbols> pEnumTypes;
+            com_ptr<IDiaEnumSymbols> pEnumTypes;
             if ( FAILED( m_pGlobal->findChildren( SymTagUDT, w_type.c_str( ), nsfCaseInsensitive, &pEnumTypes ) ) || !pEnumTypes )
                 return 0;
 
-            CComPtr<IDiaSymbol> pUDT;
+            com_ptr<IDiaSymbol> pUDT;
             ULONG celt = 0;
             if ( FAILED( pEnumTypes->Next( 1, &pUDT, &celt ) ) || celt != 1 || !pUDT )
                 return 0;
@@ -191,11 +237,11 @@ namespace pdb {
             std::wstring w_type( type_name, type_name + strlen( type_name ) );
             std::wstring w_member( member_name, member_name + strlen( member_name ) );
 
-            CComPtr<IDiaEnumSymbols> pEnumTypes;
+            com_ptr<IDiaEnumSymbols> pEnumTypes;
             if ( FAILED( m_pGlobal->findChildren( SymTagUDT, w_type.c_str( ), nsfCaseInsensitive, &pEnumTypes ) ) || !pEnumTypes )
                 return 0;
 
-            CComPtr<IDiaSymbol> pUDT;
+            com_ptr<IDiaSymbol> pUDT;
             ULONG celt = 0;
             if ( FAILED( pEnumTypes->Next( 1, &pUDT, &celt ) ) || celt != 1 || !pUDT )
                 return 0;
@@ -207,20 +253,20 @@ namespace pdb {
             if ( !m_pGlobal ) return;
             std::wstring w_type( type_name, type_name + strlen( type_name ) );
 
-            CComPtr<IDiaEnumSymbols> pEnumTypes;
+            com_ptr<IDiaEnumSymbols> pEnumTypes;
             if ( FAILED( m_pGlobal->findChildren( SymTagUDT, w_type.c_str( ), nsfCaseInsensitive, &pEnumTypes ) ) || !pEnumTypes )
                 return;
 
-            CComPtr<IDiaSymbol> pUDT;
+            com_ptr<IDiaSymbol> pUDT;
             ULONG celt = 0;
             if ( FAILED( pEnumTypes->Next( 1, &pUDT, &celt ) ) || celt != 1 || !pUDT )
                 return;
 
-            CComPtr<IDiaEnumSymbols> pChildren;
+            com_ptr<IDiaEnumSymbols> pChildren;
             if ( FAILED( pUDT->findChildren( SymTagNull, nullptr, nsNone, &pChildren ) ) || !pChildren )
                 return;
 
-            CComPtr<IDiaSymbol> pChild;
+            com_ptr<IDiaSymbol> pChild;
             while ( SUCCEEDED( pChildren->Next( 1, &pChild, &celt ) ) && celt == 1 ) {
                 BSTR name = nullptr;
                 LONG offset = 0;
@@ -485,14 +531,14 @@ namespace pdb {
         bool enumerate_symbols( ) {
             if ( !m_pGlobal ) return false;
 
-            CComPtr<IDiaEnumSymbols> pEnumSymbols;
+            com_ptr<IDiaEnumSymbols> pEnumSymbols;
             HRESULT hr = m_pGlobal->findChildren( SymTagNull, NULL, nsNone, &pEnumSymbols );
             if ( FAILED( hr ) ) {
                 logging::print( oxorany( "failed to enumerate: 0x%08x" ), hr );
                 return false;
             }
 
-            CComPtr<IDiaSymbol> pSymbol;
+            com_ptr<IDiaSymbol> pSymbol;
             ULONG celt = 0;
             while ( SUCCEEDED( pEnumSymbols->Next( 1, &pSymbol, &celt ) ) && celt == 1 ) {
                 BSTR name;
