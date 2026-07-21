@@ -27,6 +27,9 @@ namespace paging {
             bool                 m_active;
         };
 
+        constexpr std::uint32_t max_entries = 512;
+        hyperspace_entry_t m_entries[ max_entries ] = {};
+
         void track_portal_pml4( std::int32_t entry_idx, std::uint32_t pml4_index ) {
             if ( entry_idx < 0 || entry_idx >= static_cast< std::int32_t >( max_entries ) )
                 return;
@@ -57,9 +60,6 @@ namespace paging {
                 return;
             }
         }
-
-        constexpr std::uint32_t max_entries = 512;
-        hyperspace_entry_t m_entries[ max_entries ] = {};
 
         std::int32_t find_entry( eprocess_t* process ) {
             for ( auto i = 0; i < max_entries; i++ ) {

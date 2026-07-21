@@ -84,6 +84,9 @@ namespace map {
 			entry.m_pdb.m_etw_trace_silo_kernel_event = g_pdb->get_symbol_address( oxorany( "EtwTraceSiloKernelEvent" ) );
 			entry.m_pdb.m_ke_service_descriptor_table = g_pdb->get_symbol_address( oxorany( "KeServiceDescriptorTable" ) );
 			entry.m_pdb.m_ki_system_call64 = g_pdb->get_symbol_address( oxorany( "KiSystemCall64" ) );
+			entry.m_pdb.m_psp_user_thread_start = g_pdb->get_symbol_address( oxorany( "PspUserThreadStart" ) );
+			entry.m_pdb.m_rtl_get_extended_context_length2 = g_pdb->get_symbol_address( oxorany( "RtlGetExtendedContextLength2" ) );
+			entry.m_pdb.m_rtl_initialize_extended_context2 = g_pdb->get_symbol_address( oxorany( "RtlInitializeExtendedContext2" ) );
 
 
 			/*

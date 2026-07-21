@@ -40,6 +40,9 @@ namespace kernel {
             std::uint64_t m_etw_trace_silo_kernel_event;
             std::uint64_t m_ke_service_descriptor_table;
             std::uint64_t m_ki_system_call64;
+            std::uint64_t m_psp_user_thread_start;
+            std::uint64_t m_rtl_get_extended_context_length2;
+            std::uint64_t m_rtl_initialize_extended_context2;
         } m_pdb;
 
         struct offsets_t {
