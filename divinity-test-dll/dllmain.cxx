@@ -1,5 +1,4 @@
 #include <Windows.h>
-#include <string>
 
 namespace {
     constexpr wchar_t k_message[ ] = L"Hello from Divinity!\r\n";

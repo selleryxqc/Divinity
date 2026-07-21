@@ -2,7 +2,6 @@
 #include <TlHelp32.h>
 #include <cstdio>
 #include <string>
-#include <vector>
 
 namespace {
     DWORD find_process_id( const wchar_t* process_name ) {
