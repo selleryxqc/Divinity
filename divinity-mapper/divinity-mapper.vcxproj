@@ -126,6 +126,9 @@
       <AdditionalLibraryDirectories>$(VSInstallDir)DIA SDK\lib\amd64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>diaguids.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>if exist "$(VSInstallDir)DIA SDK\bin\amd64\msdia140.dll" copy /Y "$(VSInstallDir)DIA SDK\bin\amd64\msdia140.dll" "$(OutDir)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -148,6 +151,9 @@
       <AdditionalDependencies>diaguids.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
+    <PostBuildEvent>
+      <Command>if exist "$(VSInstallDir)DIA SDK\bin\amd64\msdia140.dll" copy /Y "$(VSInstallDir)DIA SDK\bin\amd64\msdia140.dll" "$(OutDir)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cxx" />
